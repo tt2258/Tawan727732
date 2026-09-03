@@ -1,0 +1,880 @@
+-- 6 PM Master HUB V3 - BY ตูน EXE
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local player = Players.LocalPlayer
+
+-- UI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = player.PlayerGui
+screenGui.ResetOnSpawn = false
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 300, 0, 35)
+mainFrame.Position = UDim2.new(0, 10, 0, 10)
+mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+-- ไฟวิ่งรอบเมนู
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(255, 0, 0)
+stroke.Thickness = 2
+stroke.Parent = mainFrame
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 6)
+UICorner.Parent = mainFrame
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(1, 0, 1, 0)
+toggleBtn.BackgroundTransparency = 1
+toggleBtn.Text = "👻 6PM HUB V3 ▼"
+toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleBtn.Parent = mainFrame
+
+-- เมนูเลื่อน
+local scrollFrame = Instance.new("ScrollingFrame")
+scrollFrame.Size = UDim2.new(0, 300, 0, 300)
+scrollFrame.Position = UDim2.new(0, 0, 0, 40)
+scrollFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+scrollFrame.ScrollBarThickness = 4
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 550)
+scrollFrame.Visible = false
+scrollFrame.Parent = mainFrame
+
+-- ฟังก์ชันสร้างปุ่ม
+local function CreateBtn(name, yPos, emoji)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.9, 0, 0, 35)
+    btn.Position = UDim2.new(0.05, 0, 0, yPos)
+    btn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    btn.Text = emoji .. " " .. name .. ": OFF"
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Parent = scrollFrame
+    return btn
+end
+
+-- ฟังก์ชันสร้างสไลด์
+local function CreateSlider(name, yPos, defaultValue, maxValue, parent)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0.9, 0, 0, 50)
+    frame.Position = UDim2.new(0.05, 0, 0, yPos)
+    frame.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    frame.Parent = parent
+    
+    local label = Instance.new("TextLabel")
+    label.Size = UDim2.new(1, 0, 0.4, 0)
+    label.BackgroundTransparency = 1
+    label.Text = name
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.Position = UDim2.new(0, 0, 0, 0)
+    label.Parent = frame
+    
+    local valueLabel = Instance.new("TextLabel")
+    valueLabel.Size = UDim2.new(1, 0, 0.3, 0)
+    valueLabel.BackgroundTransparency = 1
+    valueLabel.Text = "ค่า: " .. defaultValue
+    valueLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
+    valueLabel.Position = UDim2.new(0, 0, 0.4, 0)
+    valueLabel.Parent = frame
+    
+    local slider = Instance.new("TextButton")
+    slider.Size = UDim2.new(1, 0, 0.3, 0)
+    slider.Position = UDim2.new(0, 0, 0.7, 0)
+    slider.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+    slider.Text = ""
+    slider.Parent = frame
+    
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new(defaultValue/maxValue, 0, 1, 0)
+    fill.Position = UDim2.new(0, 0, 0, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    fill.BorderSizePixel = 0
+    fill.Parent = slider
+    
+    return frame, slider, valueLabel, fill
+end
+
+-- ============ เครื่องคิดเลข ============
+local function CreateCalculator()
+    local calcFrame = Instance.new("Frame")
+    calcFrame.Size = UDim2.new(0.9, 0, 0, 220)
+    calcFrame.Position = UDim2.new(0.05, 0, 0, 310)
+    calcFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    calcFrame.Parent = scrollFrame
+    
+    local calcCorner = Instance.new("UICorner")
+    calcCorner.CornerRadius = UDim.new(0, 6)
+    calcCorner.Parent = calcFrame
+    
+    -- ชื่อเครื่องคิดเลข
+    local calcTitle = Instance.new("TextLabel")
+    calcTitle.Size = UDim2.new(1, 0, 0, 25)
+    calcTitle.Position = UDim2.new(0, 0, 0, 0)
+    calcTitle.BackgroundTransparency = 1
+    calcTitle.Text = "🧮 เครื่องคิดเลข"
+    calcTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    calcTitle.TextSize = 14
+    calcTitle.Font = Enum.Font.GothamBold
+    calcTitle.Parent = calcFrame
+    
+    -- ช่องแสดงผล
+    local display = Instance.new("TextBox")
+    display.Size = UDim2.new(0.95, 0, 0, 35)
+    display.Position = UDim2.new(0.025, 0, 0, 28)
+    display.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+    display.TextColor3 = Color3.fromRGB(255, 255, 255)
+    display.Text = "0"
+    display.TextSize = 20
+    display.TextXAlignment = Enum.TextXAlignment.Right
+    display.ClearTextOnFocus = false
+    display.Parent = calcFrame
+    
+    local displayCorner = Instance.new("UICorner")
+    displayCorner.CornerRadius = UDim.new(0, 4)
+    displayCorner.Parent = display
+    
+    -- ฟังก์ชันสร้างปุ่มเครื่องคิดเลข
+    local function CreateCalcButton(text, xPos, yPos, color)
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(0.22, 0, 0, 30)
+        btn.Position = UDim2.new(xPos, 0, yPos, 0)
+        btn.BackgroundColor3 = color or Color3.fromRGB(60, 60, 70)
+        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        btn.Text = text
+        btn.TextSize = 16
+        btn.Font = Enum.Font.GothamBold
+        btn.Parent = calcFrame
+        
+        local btnCorner = Instance.new("UICorner")
+        btnCorner.CornerRadius = UDim.new(0, 4)
+        btnCorner.Parent = btn
+        
+        return btn
+    end
+    
+    -- ตัวแปรสถานะเครื่องคิดเลข
+    local calcState = {
+        currentNumber = "0",
+        previousNumber = "",
+        operation = "",
+        isNewNumber = true,
+        memory = 0,
+        hasMemory = false
+    }
+    
+    -- ฟังก์ชันอัพเดตหน้าจอ
+    local function UpdateDisplay()
+        local displayText = calcState.currentNumber
+        if displayText == "" then displayText = "0" end
+        display.Text = displayText
+    end
+    
+    -- ฟังก์ชันจัดการตัวเลข
+    local function InputNumber(num)
+        if calcState.isNewNumber then
+            calcState.currentNumber = tostring(num)
+            calcState.isNewNumber = false
+        else
+            if calcState.currentNumber == "0" and num ~= "." then
+                calcState.currentNumber = tostring(num)
+            else
+                calcState.currentNumber = calcState.currentNumber .. tostring(num)
+            end
+        end
+        UpdateDisplay()
+    end
+    
+    -- ฟังก์ชันจัดการเครื่องหมาย
+    local function InputOperation(op)
+        local num = tonumber(calcState.currentNumber) or 0
+        if calcState.previousNumber ~= "" and calcState.operation ~= "" then
+            Calculate()
+        end
+        calcState.previousNumber = tostring(num)
+        calcState.operation = op
+        calcState.isNewNumber = true
+    end
+    
+    -- ฟังก์ชันคำนวณ
+    local function Calculate()
+        local current = tonumber(calcState.currentNumber) or 0
+        local previous = tonumber(calcState.previousNumber) or 0
+        local result = 0
+        
+        if calcState.operation == "+" then
+            result = previous + current
+        elseif calcState.operation == "-" then
+            result = previous - current
+        elseif calcState.operation == "×" then
+            result = previous * current
+        elseif calcState.operation == "÷" then
+            if current ~= 0 then
+                result = previous / current
+            else
+                display.Text = "Error"
+                return
+            end
+        elseif calcState.operation == "^" then
+            result = previous ^ current
+        elseif calcState.operation == "%" then
+            result = previous % current
+        elseif calcState.operation == "√" then
+            result = math.sqrt(current)
+        end
+        
+        calcState.currentNumber = tostring(result)
+        calcState.previousNumber = ""
+        calcState.operation = ""
+        calcState.isNewNumber = true
+        UpdateDisplay()
+    end
+    
+    -- ฟังก์ชันล้างค่า
+    local function ClearAll()
+        calcState.currentNumber = "0"
+        calcState.previousNumber = ""
+        calcState.operation = ""
+        calcState.isNewNumber = true
+        UpdateDisplay()
+    end
+    
+    -- ฟังก์ชันลบตัวสุดท้าย
+    local function Backspace()
+        if #calcState.currentNumber > 1 then
+            calcState.currentNumber = string.sub(calcState.currentNumber, 1, #calcState.currentNumber - 1)
+        else
+            calcState.currentNumber = "0"
+            calcState.isNewNumber = true
+        end
+        UpdateDisplay()
+    end
+    
+    -- ฟังก์ชันเปลี่ยนเครื่องหมาย
+    local function ToggleSign()
+        if calcState.currentNumber ~= "0" then
+            if string.sub(calcState.currentNumber, 1, 1) == "-" then
+                calcState.currentNumber = string.sub(calcState.currentNumber, 2)
+            else
+                calcState.currentNumber = "-" .. calcState.currentNumber
+            end
+        end
+        UpdateDisplay()
+    end
+    
+    -- ฟังก์ชัน Memory
+    local function MemoryStore()
+        calcState.memory = tonumber(calcState.currentNumber) or 0
+        calcState.hasMemory = true
+        warn("💾 เก็บค่าในหน่วยความจำ: " .. calcState.memory)
+    end
+    
+    local function MemoryRecall()
+        if calcState.hasMemory then
+            calcState.currentNumber = tostring(calcState.memory)
+            calcState.isNewNumber = true
+            UpdateDisplay()
+            warn("📤 ดึงค่าจากหน่วยความจำ: " .. calcState.memory)
+        end
+    end
+    
+    local function MemoryClear()
+        calcState.memory = 0
+        calcState.hasMemory = false
+        warn("🗑️ ล้างหน่วยความจำแล้ว")
+    end
+    
+    -- สร้างปุ่มเครื่องคิดเลข
+    -- แถวที่ 1 (ฟังก์ชันพิเศษ)
+    local btnMC = CreateCalcButton("MC", 0.01, 0.18, Color3.fromRGB(80, 60, 80))
+    local btnMR = CreateCalcButton("MR", 0.25, 0.18, Color3.fromRGB(80, 60, 80))
+    local btnMS = CreateCalcButton("MS", 0.49, 0.18, Color3.fromRGB(80, 60, 80))
+    local btnMPlus = CreateCalcButton("M+", 0.73, 0.18, Color3.fromRGB(80, 60, 80))
+    
+    btnMC.MouseButton1Click:Connect(MemoryClear)
+    btnMR.MouseButton1Click:Connect(MemoryRecall)
+    btnMS.MouseButton1Click:Connect(MemoryStore)
+    btnMPlus.MouseButton1Click:Connect(function()
+        calcState.memory = calcState.memory + (tonumber(calcState.currentNumber) or 0)
+        calcState.hasMemory = true
+        warn("📥 เพิ่มค่าในหน่วยความจำ: " .. calcState.memory)
+    end)
+    
+    -- แถวที่ 2
+    local btnClear = CreateCalcButton("C", 0.01, 0.33, Color3.fromRGB(200, 50, 50))
+    local btnBack = CreateCalcButton("⌫", 0.25, 0.33, Color3.fromRGB(200, 120, 50))
+    local btnPercent = CreateCalcButton("%", 0.49, 0.33, Color3.fromRGB(60, 80, 100))
+    local btnDivide = CreateCalcButton("÷", 0.73, 0.33, Color3.fromRGB(255, 150, 0))
+    
+    btnClear.MouseButton1Click:Connect(ClearAll)
+    btnBack.MouseButton1Click:Connect(Backspace)
+    btnPercent.MouseButton1Click:Connect(function()
+        InputOperation("%")
+    end)
+    btnDivide.MouseButton1Click:Connect(function()
+        InputOperation("÷")
+    end)
+    
+    -- แถวที่ 3
+    local btn7 = CreateCalcButton("7", 0.01, 0.48, Color3.fromRGB(50, 50, 60))
+    local btn8 = CreateCalcButton("8", 0.25, 0.48, Color3.fromRGB(50, 50, 60))
+    local btn9 = CreateCalcButton("9", 0.49, 0.48, Color3.fromRGB(50, 50, 60))
+    local btnMultiply = CreateCalcButton("×", 0.73, 0.48, Color3.fromRGB(255, 150, 0))
+    
+    btn7.MouseButton1Click:Connect(function() InputNumber(7) end)
+    btn8.MouseButton1Click:Connect(function() InputNumber(8) end)
+    btn9.MouseButton1Click:Connect(function() InputNumber(9) end)
+    btnMultiply.MouseButton1Click:Connect(function()
+        InputOperation("×")
+    end)
+    
+    -- แถวที่ 4
+    local btn4 = CreateCalcButton("4", 0.01, 0.63, Color3.fromRGB(50, 50, 60))
+    local btn5 = CreateCalcButton("5", 0.25, 0.63, Color3.fromRGB(50, 50, 60))
+    local btn6 = CreateCalcButton("6", 0.49, 0.63, Color3.fromRGB(50, 50, 60))
+    local btnMinus = CreateCalcButton("-", 0.73, 0.63, Color3.fromRGB(255, 150, 0))
+    
+    btn4.MouseButton1Click:Connect(function() InputNumber(4) end)
+    btn5.MouseButton1Click:Connect(function() InputNumber(5) end)
+    btn6.MouseButton1Click:Connect(function() InputNumber(6) end)
+    btnMinus.MouseButton1Click:Connect(function()
+        InputOperation("-")
+    end)
+    
+    -- แถวที่ 5
+    local btn1 = CreateCalcButton("1", 0.01, 0.78, Color3.fromRGB(50, 50, 60))
+    local btn2 = CreateCalcButton("2", 0.25, 0.78, Color3.fromRGB(50, 50, 60))
+    local btn3 = CreateCalcButton("3", 0.49, 0.78, Color3.fromRGB(50, 50, 60))
+    local btnPlus = CreateCalcButton("+", 0.73, 0.78, Color3.fromRGB(255, 150, 0))
+    
+    btn1.MouseButton1Click:Connect(function() InputNumber(1) end)
+    btn2.MouseButton1Click:Connect(function() InputNumber(2) end)
+    btn3.MouseButton1Click:Connect(function() InputNumber(3) end)
+    btnPlus.MouseButton1Click:Connect(function()
+        InputOperation("+")
+    end)
+    
+    -- แถวที่ 6
+    local btnSign = CreateCalcButton("±", 0.01, 0.93, Color3.fromRGB(60, 60, 80))
+    local btn0 = CreateCalcButton("0", 0.25, 0.93, Color3.fromRGB(50, 50, 60))
+    local btnDot = CreateCalcButton(".", 0.49, 0.93, Color3.fromRGB(50, 50, 60))
+    local btnEqual = CreateCalcButton("=", 0.73, 0.93, Color3.fromRGB(50, 200, 50))
+    
+    btnSign.MouseButton1Click:Connect(ToggleSign)
+    btn0.MouseButton1Click:Connect(function() InputNumber(0) end)
+    btnDot.MouseButton1Click:Connect(function()
+        if not string.find(calcState.currentNumber, "%.") then
+            calcState.currentNumber = calcState.currentNumber .. "."
+        end
+        UpdateDisplay()
+    end)
+    btnEqual.MouseButton1Click:Connect(Calculate)
+    
+    -- ฟังก์ชันเพิ่มเติม (Square Root, Power)
+    local function AddExtraFunction(text, xPos, yPos, operation)
+        local btn = CreateCalcButton(text, xPos, yPos, Color3.fromRGB(60, 80, 100))
+        btn.MouseButton1Click:Connect(function()
+            if operation == "√" then
+                local num = tonumber(calcState.currentNumber) or 0
+                if num >= 0 then
+                    calcState.currentNumber = tostring(math.sqrt(num))
+                    calcState.isNewNumber = true
+                    UpdateDisplay()
+                else
+                    display.Text = "Error"
+                end
+            elseif operation == "^" then
+                InputOperation("^")
+            end
+        end)
+        return btn
+    end
+    
+    -- เพิ่มปุ่ม √ และ x²
+    local btnSqrt = AddExtraFunction("√", 0.01, 0.035, "√")
+    local btnPower = AddExtraFunction("x²", 0.25, 0.035, "^")
+    local btnPi = CreateCalcButton("π", 0.49, 0.035, Color3.fromRGB(60, 80, 100))
+    btnPi.MouseButton1Click:Connect(function()
+        calcState.currentNumber = tostring(math.pi)
+        calcState.isNewNumber = true
+        UpdateDisplay()
+    end)
+    
+    return calcFrame
+end
+
+-- สร้าง Warning UI
+local function CreateWarningUI()
+    local warningGui = Instance.new("ScreenGui")
+    warningGui.Name = "WarningOverlay"
+    warningGui.Parent = player.PlayerGui
+    warningGui.ResetOnSpawn = false
+    
+    local warningLabel = Instance.new("TextLabel")
+    warningLabel.Name = "WarningLabel"
+    warningLabel.Size = UDim2.new(1, 0, 0, 40)
+    warningLabel.Position = UDim2.new(0, 0, 0.9, 0)
+    warningLabel.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+    warningLabel.BackgroundTransparency = 0.3
+    warningLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    warningLabel.Text = " "
+    warningLabel.Font = Enum.Font.SourceSansBold
+    warningLabel.TextSize = 18
+    warningLabel.Visible = false
+    warningLabel.Parent = warningGui
+    
+    return warningLabel
+end
+
+-- สร้างเมนู
+local ghostEspBtn = CreateBtn("Ghost ESP", 10, "👻")
+local speedBtn = CreateBtn("Speed Hack", 50, "⚡")
+local jumpBtn = CreateBtn("High Jump", 90, "🦘")
+local noclipBtn = CreateBtn("No Clip", 130, "🚶‍♂️")
+local flyBtn = CreateBtn("Fly Hack", 170, "🕊️")
+
+-- สร้างสไลด์
+local speedFrame, speedSlider, speedLabel, speedFill = CreateSlider("⚡ ความเร็ว", 210, 16, 100, scrollFrame)
+local jumpFrame, jumpSlider, jumpLabel, jumpFill = CreateSlider("🦘 กระโดดสูง", 270, 50, 200, scrollFrame)
+
+-- สร้างเครื่องคิดเลข
+local calculator = CreateCalculator()
+
+-- ตัวแปร
+local connections = {}
+local warningLabel = CreateWarningUI()
+local ghostHighlights = {}
+local isFlying = false
+local flyConnection = nil
+
+-- ฟังก์ชันพื้นฐาน
+local function GetHumanoid()
+    return player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+end
+
+local function GetHRP()
+    return player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+end
+
+-- ไฟวิ่ง
+task.spawn(function()
+    local colors = {
+        Color3.fromRGB(255, 0, 0),
+        Color3.fromRGB(255, 50, 50),
+        Color3.fromRGB(200, 0, 0),
+        Color3.fromRGB(255, 100, 100)
+    }
+    local i = 1
+    while true do
+        i = i + 0.02
+        if i >= #colors + 1 then i = 1 end
+        stroke.Color = colors[math.floor(i)]
+        task.wait(0.05)
+    end
+end)
+
+-- Ghost ESP Functions
+local function UpdateGhostESP()
+    local myHRP = GetHRP()
+    if not myHRP then return end
+    
+    local nearestGhost = nil
+    local nearestDistance = math.huge
+    
+    -- ค้นหาผี/ศัตรู
+    for _, plr in pairs(Players:GetPlayers()) do
+        if plr ~= player and plr.Character then
+            local targetHRP = plr.Character:FindFirstChild("HumanoidRootPart")
+            local humanoid = plr.Character:FindFirstChildOfClass("Humanoid")
+            
+            if targetHRP and humanoid and humanoid.Health > 0 then
+                local distance = (myHRP.Position - targetHRP.Position).Magnitude
+                
+                local existingHighlight = plr.Character:FindFirstChild("GhostESP")
+                
+                if ghostEspBtn.Text:find("ON") and not existingHighlight then
+                    local highlight = Instance.new("Highlight")
+                    highlight.Name = "GhostESP"
+                    highlight.FillColor = Color3.fromRGB(255, 0, 0)
+                    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    highlight.FillTransparency = 0.5
+                    highlight.OutlineTransparency = 0
+                    highlight.Parent = plr.Character
+                    ghostHighlights[plr] = highlight
+                elseif not ghostEspBtn.Text:find("ON") and existingHighlight then
+                    existingHighlight:Destroy()
+                    ghostHighlights[plr] = nil
+                end
+                
+                if distance < nearestDistance then
+                    nearestDistance = distance
+                    nearestGhost = plr
+                end
+            end
+        end
+    end
+    
+    -- ค้นหา NPC
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        if obj:IsA("Model") then
+            local humanoid = obj:FindFirstChildOfClass("Humanoid")
+            local rootPart = obj:FindFirstChild("HumanoidRootPart")
+            
+            if humanoid and rootPart and humanoid.Health > 0 then
+                local isPlayer = false
+                for _, plr in pairs(Players:GetPlayers()) do
+                    if plr.Character == obj then
+                        isPlayer = true
+                        break
+                    end
+                end
+                
+                if not isPlayer then
+                    local distance = (myHRP.Position - rootPart.Position).Magnitude
+                    
+                    local existingHighlight = obj:FindFirstChild("GhostESP")
+                    
+                    if ghostEspBtn.Text:find("ON") and not existingHighlight then
+                        local highlight = Instance.new("Highlight")
+                        highlight.Name = "GhostESP"
+                        highlight.FillColor = Color3.fromRGB(255, 100, 0)
+                        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                        highlight.FillTransparency = 0.5
+                        highlight.OutlineTransparency = 0
+                        highlight.Parent = obj
+                    elseif not ghostEspBtn.Text:find("ON") and existingHighlight then
+                        existingHighlight:Destroy()
+                    end
+                    
+                    if distance < nearestDistance then
+                        nearestDistance = distance
+                        nearestGhost = obj
+                    end
+                end
+            end
+        end
+    end
+    
+    -- อัพเดท Warning
+    if nearestGhost and nearestDistance < 50 then
+        local ghostName = nearestGhost.Name
+        if nearestGhost:IsA("Player") then
+            ghostName = nearestGhost.DisplayName
+        end
+        
+        warningLabel.Text = "🚨 ระวัง! " .. ghostName .. " อยู่ใกล้ (" .. math.floor(nearestDistance) .. "m)"
+        warningLabel.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+        warningLabel.Visible = true
+    else
+        warningLabel.Visible = false
+    end
+    
+    for ghost, highlight in pairs(ghostHighlights) do
+        if not ghost.Character or not ghost.Character:IsDescendantOf(Workspace) then
+            highlight:Destroy()
+            ghostHighlights[ghost] = nil
+        end
+    end
+end
+
+local function ClearAllESP()
+    for _, highlight in pairs(ghostHighlights) do
+        highlight:Destroy()
+    end
+    ghostHighlights = {}
+    
+    for _, obj in pairs(Workspace:GetDescendants()) do
+        local highlight = obj:FindFirstChild("GhostESP")
+        if highlight then
+            highlight:Destroy()
+        end
+    end
+    
+    warningLabel.Visible = false
+end
+
+-- Fly Hack Functions
+local function StartFlying()
+    local bodyVelocity = Instance.new("BodyVelocity")
+    bodyVelocity.Name = "FlyVelocity"
+    bodyVelocity.MaxForce = Vector3.new(40000, 40000, 40000)
+    
+    flyConnection = RunService.Heartbeat:Connect(function()
+        local character = player.Character
+        if character then
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            
+            if humanoid and rootPart then
+                humanoid.PlatformStand = true
+                
+                local camera = Workspace.CurrentCamera
+                local direction = Vector3.new()
+                
+                if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+                    direction = direction + camera.CFrame.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+                    direction = direction - camera.CFrame.LookVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+                    direction = direction - camera.CFrame.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+                    direction = direction + camera.CFrame.RightVector
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+                    direction = direction + Vector3.new(0, 1, 0)
+                end
+                if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+                    direction = direction - Vector3.new(0, 1, 0)
+                end
+                
+                if direction.Magnitude > 0 then
+                    direction = direction.Unit * 100
+                end
+                
+                bodyVelocity.Velocity = direction
+                bodyVelocity.Parent = rootPart
+            end
+        end
+    end)
+end
+
+local function StopFlying()
+    if flyConnection then
+        flyConnection:Disconnect()
+        flyConnection = nil
+    end
+    
+    local character = player.Character
+    if character then
+        local humanoid = character:FindFirstChildOfClass("Humanoid")
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        
+        if humanoid then
+            humanoid.PlatformStand = false
+        end
+        
+        if rootPart then
+            local bodyVelocity = rootPart:FindFirstChild("FlyVelocity")
+            if bodyVelocity then
+                bodyVelocity:Destroy()
+            end
+        end
+    end
+end
+
+-- Toggle Menu
+toggleBtn.MouseButton1Click:Connect(function()
+    scrollFrame.Visible = not scrollFrame.Visible
+    toggleBtn.Text = scrollFrame.Visible and "👻 6PM HUB V3 ▲" or "👻 6PM HUB V3 ▼"
+end)
+
+-- 1. Ghost ESP
+ghostEspBtn.MouseButton1Click:Connect(function()
+    local state = ghostEspBtn.Text:find("OFF")
+    
+    if state then
+        ghostEspBtn.Text = "👻 Ghost ESP: ON"
+        ghostEspBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+        
+        connections.ghost = RunService.Heartbeat:Connect(function()
+            UpdateGhostESP()
+        end)
+        warn("Ghost ESP เปิดใช้งานแล้ว")
+    else
+        ghostEspBtn.Text = "👻 Ghost ESP: OFF"
+        ghostEspBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        if connections.ghost then connections.ghost:Disconnect() end
+        ClearAllESP()
+        warn("Ghost ESP ปิดใช้งานแล้ว")
+    end
+end)
+
+-- 2. Speed Hack
+speedBtn.MouseButton1Click:Connect(function()
+    local state = speedBtn.Text:find("OFF")
+    
+    if state then
+        speedBtn.Text = "⚡ Speed Hack: ON"
+        speedBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+        
+        local humanoid = GetHumanoid()
+        if humanoid then
+            humanoid.WalkSpeed = 35
+        end
+        warn("Speed Hack เปิดใช้งานแล้ว")
+    else
+        speedBtn.Text = "⚡ Speed Hack: OFF"
+        speedBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        
+        local humanoid = GetHumanoid()
+        if humanoid then
+            humanoid.WalkSpeed = 16
+        end
+        warn("Speed Hack ปิดใช้งานแล้ว")
+    end
+end)
+
+-- 3. High Jump
+jumpBtn.MouseButton1Click:Connect(function()
+    local state = jumpBtn.Text:find("OFF")
+    
+    if state then
+        jumpBtn.Text = "🦘 High Jump: ON"
+        jumpBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+        
+        local humanoid = GetHumanoid()
+        if humanoid then
+            humanoid.JumpPower = 80
+        end
+        warn("High Jump เปิดใช้งานแล้ว")
+    else
+        jumpBtn.Text = "🦘 High Jump: OFF"
+        jumpBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        
+        local humanoid = GetHumanoid()
+        if humanoid then
+            humanoid.JumpPower = 50
+        end
+        warn("High Jump ปิดใช้งานแล้ว")
+    end
+end)
+
+-- 4. No Clip
+noclipBtn.MouseButton1Click:Connect(function()
+    local state = noclipBtn.Text:find("OFF")
+    
+    if state then
+        noclipBtn.Text = "🚶‍♂️ No Clip: ON"
+        noclipBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+        
+        connections.noclip = RunService.Stepped:Connect(function()
+            local char = player.Character
+            if char then
+                for _, part in pairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = false
+                    end
+                end
+            end
+        end)
+        warn("No Clip เปิดใช้งานแล้ว")
+    else
+        noclipBtn.Text = "🚶‍♂️ No Clip: OFF"
+        noclipBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        if connections.noclip then connections.noclip:Disconnect() end
+        warn("No Clip ปิดใช้งานแล้ว")
+    end
+end)
+
+-- 5. Fly Hack
+flyBtn.MouseButton1Click:Connect(function()
+    local state = flyBtn.Text:find("OFF")
+    
+    if state then
+        flyBtn.Text = "🕊️ Fly Hack: ON"
+        flyBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+        
+        StartFlying()
+        warn("Fly Hack เปิดใช้งานแล้ว - ใช้ W,A,S,D, Space, Shift")
+    else
+        flyBtn.Text = "🕊️ Fly Hack: OFF"
+        flyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+        
+        StopFlying()
+        warn("Fly Hack ปิดใช้งานแล้ว")
+    end
+end)
+
+-- Speed Slider
+speedSlider.MouseButton1Down:Connect(function()
+    local connection
+    connection = RunService.Heartbeat:Connect(function()
+        local mouse = Players.LocalPlayer:GetMouse()
+        local x = math.clamp((mouse.X - speedSlider.AbsolutePosition.X) / speedSlider.AbsoluteSize.X, 0, 1)
+        
+        local speed = 16 + (x * 84)
+        speedFill.Size = UDim2.new(x, 0, 1, 0)
+        speedLabel.Text = "ค่า: " .. math.floor(speed)
+        
+        local humanoid = GetHumanoid()
+        if humanoid then
+            humanoid.WalkSpeed = speed
+        end
+    end)
+    
+    local function disconnect()
+        connection:Disconnect()
+        speedSlider.MouseButton1Up:Disconnect()
+    end
+    
+    speedSlider.MouseButton1Up:Connect(disconnect)
+end)
+
+-- Jump Slider
+jumpSlider.MouseButton1Down:Connect(function()
+    local connection
+    connection = RunService.Heartbeat:Connect(function()
+        local mouse = Players.LocalPlayer:GetMouse()
+        local x = math.clamp((mouse.X - jumpSlider.AbsolutePosition.X) / jumpSlider.AbsoluteSize.X, 0, 1)
+        
+        local jump = 50 + (x * 150)
+        jumpFill.Size = UDim2.new(x, 0, 1, 0)
+        jumpLabel.Text = "ค่า: " .. math.floor(jump)
+        
+        local humanoid = GetHumanoid()
+        if humanoid then
+            humanoid.JumpPower = jump
+        end
+    end)
+    
+    local function disconnect()
+        connection:Disconnect()
+        jumpSlider.MouseButton1Up:Disconnect()
+    end
+    
+    jumpSlider.MouseButton1Up:Connect(disconnect)
+end)
+
+-- รีเซ็ตเมื่อเกิดใหม่
+player.CharacterAdded:Connect(function()
+    task.wait(1)
+    
+    ghostEspBtn.Text = "👻 Ghost ESP: OFF"
+    ghostEspBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    speedBtn.Text = "⚡ Speed Hack: OFF"
+    speedBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    jumpBtn.Text = "🦘 High Jump: OFF"
+    jumpBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    noclipBtn.Text = "🚶‍♂️ No Clip: OFF"
+    noclipBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    flyBtn.Text = "🕊️ Fly Hack: OFF"
+    flyBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    
+    for _, conn in pairs(connections) do
+        conn:Disconnect()
+    end
+    
+    StopFlying()
+    ClearAllESP()
+    
+    local humanoid = GetHumanoid()
+    if humanoid then
+        humanoid.WalkSpeed = 16
+        humanoid.JumpPower = 50
+    end
+    
+    warn("รีเซ็ตฟังก์ชันแล้ว")
+end)
+
+warn("👻 6 PM MASTER HUB V3 โหลดสำเร็จ! - BY ตูน EXE")
+warn("🎯 พร้อมใช้งานสำหรับเกม 6 PM")
+warn("✨ ฟีเจอร์: Ghost ESP, Speed Hack, High Jump, No Clip, Fly Hack")
+warn("🧮 มีเครื่องคิดเลขในตัว!")
+warn("🚨 มีระบบแจ้งเตือนเมื่อศัตรูอยู่ใกล้")
