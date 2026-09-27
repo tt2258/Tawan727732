@@ -6,6 +6,15 @@ local UserInputService = game:GetService("UserInputService")
 local Lighting = game:GetService("Lighting")
 local player = Players.LocalPlayer
 
+-- ============ รายชื่อผี ============
+local GHOST_NAMES = {
+    "P'Best",
+    "SamornSri",
+    "Chayanan Premsuk",
+    "Dance Teacher",
+    "Montra"
+}
+
 -- ============ UI Setup ============
 local screenGui = Instance.new("ScreenGui")
 screenGui.Parent = player.PlayerGui
@@ -119,18 +128,18 @@ local rainbowConnection = nil
 local isMenuOpen = false
 local ghostViewActive = false
 local ghostViewConnection = nil
+local selectedGhost = nil
 
--- ============ ระบบลาก UI (แยกคลิก/ลาก ชัดเจน) ============
+-- ============ ระบบลาก UI ============
 local dragging = false
 local dragStart = nil
 local startPos = nil
 local dragMoved = false
-local DRAG_THRESHOLD = 5 -- ต้องลากเกิน 5 pixel ถึงจะนับว่าลาก
+local DRAG_THRESHOLD = 5
 
 local function updateDrag(input)
     local delta = input.Position - dragStart
     
-    -- เช็คว่าลากเกิน threshold หรือยัง
     if math.abs(delta.X) > DRAG_THRESHOLD or math.abs(delta.Y) > DRAG_THRESHOLD then
         dragMoved = true
     end
@@ -145,7 +154,6 @@ local function updateDrag(input)
     end
 end
 
--- ผูกการลากกับ Title Button
 titleBtn.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or 
        input.UserInputType == Enum.UserInputType.Touch then
@@ -170,7 +178,6 @@ titleBtn.InputEnded:Connect(function(input)
     end
 end)
 
--- ผูกการลากกับ Main Frame (เฉพาะพื้นที่ที่ไม่ใช่ปุ่ม)
 mainFrame.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or 
        input.UserInputType == Enum.UserInputType.Touch then
@@ -195,7 +202,6 @@ mainFrame.InputEnded:Connect(function(input)
     end
 end)
 
--- หยุดลากเมื่อปล่อยเมาส์ทุกที่
 UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or 
        input.UserInputType == Enum.UserInputType.Touch then
@@ -214,46 +220,22 @@ local function GetHRP()
     return char and char:FindFirstChild("HumanoidRootPart")
 end
 
--- ============ ตรวจสอบผู้เล่น ============
-local function IsPlayerCharacter(model)
-    for _, plr in pairs(Players:GetPlayers()) do
-        if plr.Character == model then
-            return true
-        end
-    end
-    return false
-end
-
--- ============ ค้นหาผีอัตโนมัติ ============
-local function FindGhost()
-    local myHRP = GetHRP()
-    if not myHRP then return nil, 0 end
-    
-    local nearestGhost = nil
-    local nearestDistance = math.huge
-    
+-- ============ ค้นหาผีตามชื่อ ============
+local function FindGhostByName(name)
     for _, obj in pairs(Workspace:GetDescendants()) do
         if obj:IsA("Model") then
-            local humanoid = obj:FindFirstChildOfClass("Humanoid")
-            if not humanoid or humanoid.Health <= 0 then continue end
-            
-            local rootPart = obj:FindFirstChild("HumanoidRootPart") 
-                          or obj:FindFirstChild("UpperTorso") 
-                          or obj:FindFirstChild("Torso")
-            if not rootPart then continue end
-            
-            if obj == player.Character then continue end
-            if IsPlayerCharacter(obj) then continue end
-            
-            local distance = (myHRP.Position - rootPart.Position).Magnitude
-            if distance < nearestDistance then
-                nearestDistance = distance
-                nearestGhost = obj
+            if obj.Name == name then
+                local humanoid = obj:FindFirstChildOfClass("Humanoid")
+                local rootPart = obj:FindFirstChild("HumanoidRootPart") 
+                              or obj:FindFirstChild("UpperTorso") 
+                              or obj:FindFirstChild("Torso")
+                if humanoid and rootPart then
+                    return obj
+                end
             end
         end
     end
-    
-    return nearestGhost, nearestDistance
+    return nil
 end
 
 -- ============ เปิด/ปิดเมนู ============
@@ -271,7 +253,6 @@ local function ToggleMenu()
     end
 end
 
--- ============ กดที่ Title เพื่อเปิด/ปิด (ถ้าไม่ได้ลาก) ============
 titleBtn.MouseButton1Click:Connect(function()
     if not dragMoved then
         ToggleMenu()
@@ -552,13 +533,14 @@ growBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ============ 7. มุมมองผี ============
+-- ============ 7. มุมมองผี (แบบเลือกตัว) ============
 local ghostHighlight = nil
 local selfHighlight = nil
-local distanceLabel = nil
+local ghostListGui = nil
 local distanceGui = nil
-local currentGhost = nil
+local distanceLabel = nil
 
+-- Highlight ตัวเองสีรุ้ง
 local function SetSelfRainbowHighlight()
     local char = player.Character
     if not char then return end
@@ -605,6 +587,183 @@ local function SetGhostHighlight(ghost)
     ghostHighlight.Parent = ghost
 end
 
+-- สร้าง UI เลือกผี
+local function ShowGhostList()
+    if ghostListGui then ghostListGui:Destroy() end
+    
+    ghostListGui = Instance.new("ScreenGui")
+    ghostListGui.Name = "GhostSelector"
+    ghostListGui.ResetOnSpawn = false
+    ghostListGui.DisplayOrder = 1000
+    ghostListGui.Parent = player.PlayerGui
+    
+    -- Frame หลัก
+    local listFrame = Instance.new("Frame")
+    listFrame.Size = UDim2.new(0, 250, 0, 340)
+    listFrame.Position = UDim2.new(0.5, -125, 0.5, -170)
+    listFrame.BackgroundColor3 = Color3.fromRGB(20, 15, 35)
+    listFrame.BorderSizePixel = 0
+    listFrame.Active = true
+    listFrame.Parent = ghostListGui
+    
+    local listCorner = Instance.new("UICorner")
+    listCorner.CornerRadius = UDim.new(0, 12)
+    listCorner.Parent = listFrame
+    
+    local listStroke = Instance.new("UIStroke")
+    listStroke.Color = Color3.fromRGB(160, 80, 255)
+    listStroke.Thickness = 2
+    listStroke.Parent = listFrame
+    
+    -- หัวข้อ
+    local header = Instance.new("TextLabel")
+    header.Size = UDim2.new(1, 0, 0, 45)
+    header.Position = UDim2.new(0, 0, 0, 0)
+    header.BackgroundColor3 = Color3.fromRGB(45, 25, 80)
+    header.BorderSizePixel = 0
+    header.Text = "👁️ เลือกผีที่ต้องการดู"
+    header.TextColor3 = Color3.fromRGB(255, 255, 255)
+    header.TextSize = 16
+    header.Font = Enum.Font.GothamBold
+    header.Parent = listFrame
+    
+    local headerCorner = Instance.new("UICorner")
+    headerCorner.CornerRadius = UDim.new(0, 12)
+    headerCorner.Parent = header
+    
+    -- ปุ่มปิด
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 30, 0, 30)
+    closeBtn.Position = UDim2.new(1, -35, 0, 8)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeBtn.Text = "✕"
+    closeBtn.TextSize = 14
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.Parent = listFrame
+    
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(1, 0)
+    closeCorner.Parent = closeBtn
+    
+    closeBtn.MouseButton1Click:Connect(function()
+        ghostListGui:Destroy()
+        ghostListGui = nil
+    end)
+    
+    -- Scroll Frame
+    local listScroll = Instance.new("ScrollingFrame")
+    listScroll.Size = UDim2.new(1, -20, 1, -60)
+    listScroll.Position = UDim2.new(0, 10, 0, 50)
+    listScroll.BackgroundTransparency = 1
+    listScroll.BorderSizePixel = 0
+    listScroll.ScrollBarThickness = 4
+    listScroll.ScrollBarImageColor3 = Color3.fromRGB(160, 80, 255)
+    listScroll.CanvasSize = UDim2.new(0, 0, 0, (#GHOST_NAMES + 1) * 50 + 10)
+    listScroll.Parent = listFrame
+    
+    -- ปุ่ม "ตัวเรา" (กลับมามุมมองตัวเอง)
+    local selfBtn = Instance.new("TextButton")
+    selfBtn.Size = UDim2.new(1, 0, 0, 45)
+    selfBtn.Position = UDim2.new(0, 0, 0, 0)
+    selfBtn.BackgroundColor3 = Color3.fromRGB(60, 100, 200)
+    selfBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    selfBtn.Text = "🎮 ตัวเรา (กลับมุมมองตัวเอง)"
+    selfBtn.TextSize = 13
+    selfBtn.Font = Enum.Font.GothamBold
+    selfBtn.Parent = listScroll
+    
+    local selfCorner = Instance.new("UICorner")
+    selfCorner.CornerRadius = UDim.new(0, 8)
+    selfCorner.Parent = selfBtn
+    
+    local selfStroke = Instance.new("UIStroke")
+    selfStroke.Color = Color3.fromRGB(100, 150, 255)
+    selfStroke.Thickness = 2
+    selfStroke.Parent = selfBtn
+    
+    selfBtn.MouseButton1Click:Connect(function()
+        selectedGhost = nil
+        
+        -- เอา Highlight ผีออก
+        if ghostHighlight then
+            ghostHighlight:Destroy()
+            ghostHighlight = nil
+        end
+        
+        -- กลับมุมมองตัวเอง
+        local camera = Workspace.CurrentCamera
+        local char = player.Character
+        if char then
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                camera.CFrame = CFrame.new(hrp.Position + Vector3.new(0, 10, 20), hrp.Position)
+                camera.Focus = CFrame.new(hrp.Position)
+            end
+        end
+        
+        -- เปลี่ยนสีปุ่ม
+        selfBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+        
+        task.wait(0.3)
+        selfBtn.BackgroundColor3 = Color3.fromRGB(60, 100, 200)
+        
+        if distanceLabel then
+            distanceLabel.Text = "🎮 กลับมาที่ตัวเราแล้ว"
+            distanceLabel.TextColor3 = Color3.fromRGB(100, 150, 255)
+        end
+    end)
+    
+    -- สร้างปุ่มผีแต่ละตัว
+    for i, ghostName in ipairs(GHOST_NAMES) do
+        local ghostBtn = Instance.new("TextButton")
+        ghostBtn.Size = UDim2.new(1, 0, 0, 45)
+        ghostBtn.Position = UDim2.new(0, 0, 0, i * 50)
+        ghostBtn.BackgroundColor3 = Color3.fromRGB(45, 30, 75)
+        ghostBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        ghostBtn.Text = "👻 " .. ghostName
+        ghostBtn.TextSize = 13
+        ghostBtn.Font = Enum.Font.GothamBold
+        ghostBtn.Parent = listScroll
+        
+        local ghostCorner = Instance.new("UICorner")
+        ghostCorner.CornerRadius = UDim.new(0, 8)
+        ghostCorner.Parent = ghostBtn
+        
+        local ghostStroke = Instance.new("UIStroke")
+        ghostStroke.Color = Color3.fromRGB(160, 80, 255)
+        ghostStroke.Thickness = 1.5
+        ghostStroke.Parent = ghostBtn
+        
+        ghostBtn.MouseButton1Click:Connect(function()
+            local ghost = FindGhostByName(ghostName)
+            
+            if ghost then
+                selectedGhost = ghost
+                SetGhostHighlight(ghost)
+                
+                ghostBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+                task.wait(0.3)
+                ghostBtn.BackgroundColor3 = Color3.fromRGB(45, 30, 75)
+                
+                if distanceLabel then
+                    distanceLabel.Text = "👁️ กำลังติดตาม: " .. ghostName
+                    distanceLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+                end
+            else
+                ghostBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+                if distanceLabel then
+                    distanceLabel.Text = "❌ ไม่พบ: " .. ghostName
+                    distanceLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+                end
+                task.wait(0.5)
+                ghostBtn.BackgroundColor3 = Color3.fromRGB(45, 30, 75)
+            end
+        end)
+    end
+end
+
+-- สร้าง UI แสดงระยะทาง
 local function CreateDistanceGui()
     if distanceGui then distanceGui:Destroy() end
     
@@ -615,8 +774,8 @@ local function CreateDistanceGui()
     distanceGui.Parent = player.PlayerGui
     
     local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(0, 280, 0, 35)
-    frame.Position = UDim2.new(0.5, -140, 0, 5)
+    frame.Size = UDim2.new(0, 320, 0, 35)
+    frame.Position = UDim2.new(0.5, -160, 0, 5)
     frame.BackgroundColor3 = Color3.fromRGB(20, 15, 35)
     frame.BackgroundTransparency = 0.2
     frame.BorderSizePixel = 0
@@ -634,7 +793,7 @@ local function CreateDistanceGui()
     distanceLabel = Instance.new("TextLabel")
     distanceLabel.Size = UDim2.new(1, 0, 1, 0)
     distanceLabel.BackgroundTransparency = 1
-    distanceLabel.Text = "👁️ กำลังค้นหาผี..."
+    distanceLabel.Text = "👁️ เลือกผีที่ต้องการดู"
     distanceLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
     distanceLabel.TextSize = 13
     distanceLabel.Font = Enum.Font.GothamBold
@@ -646,30 +805,40 @@ local function StartGhostView()
     
     SetSelfRainbowHighlight()
     CreateDistanceGui()
+    ShowGhostList()
     
     ghostViewConnection = RunService.RenderStepped:Connect(function()
         if not ghostViewActive then return end
         
         local camera = Workspace.CurrentCamera
-        local ghost, distance = FindGhost()
         
-        if ghost then
-            currentGhost = ghost
-            local ghostRoot = ghost:FindFirstChild("HumanoidRootPart") 
-                           or ghost:FindFirstChild("UpperTorso") 
-                           or ghost:FindFirstChild("Torso")
+        -- ถ้ามีผีที่เลือกไว้
+        if selectedGhost then
+            -- เช็คว่าผียังมีอยู่
+            if not selectedGhost.Parent then
+                selectedGhost = nil
+                if ghostHighlight then
+                    ghostHighlight:Destroy()
+                    ghostHighlight = nil
+                end
+                return
+            end
+            
+            local ghostRoot = selectedGhost:FindFirstChild("HumanoidRootPart") 
+                           or selectedGhost:FindFirstChild("UpperTorso") 
+                           or selectedGhost:FindFirstChild("Torso")
             
             if ghostRoot then
+                local myHRP = GetHRP()
                 local ghostPos = ghostRoot.Position
+                
                 camera.CFrame = CFrame.new(ghostPos + Vector3.new(0, 8, 15), ghostPos)
                 camera.Focus = CFrame.new(ghostPos)
                 
-                if not ghostHighlight or ghostHighlight.Parent ~= ghost then
-                    SetGhostHighlight(ghost)
-                end
-                
-                if distanceLabel then
-                    distanceLabel.Text = string.format("👁️ ผี: %s | ระยะ: %d m", ghost.Name, math.floor(distance))
+                -- คำนวณระยะทาง
+                if myHRP and distanceLabel then
+                    local distance = (myHRP.Position - ghostPos).Magnitude
+                    distanceLabel.Text = string.format("👁️ %s | ระยะจากตัวเรา: %d m", selectedGhost.Name, math.floor(distance))
                     
                     if distance < 20 then
                         distanceLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
@@ -680,24 +849,20 @@ local function StartGhostView()
                     end
                 end
             end
-        else
-            currentGhost = nil
-            if distanceLabel then
-                distanceLabel.Text = "👁️ ไม่พบผีในแมพ"
-                distanceLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
-            end
         end
     end)
 end
 
 local function StopGhostView()
     ghostViewActive = false
+    selectedGhost = nil
     
     if ghostViewConnection then
         ghostViewConnection:Disconnect()
         ghostViewConnection = nil
     end
     
+    -- คืนกล้อง
     local camera = Workspace.CurrentCamera
     local char = player.Character
     if char then
@@ -720,7 +885,10 @@ local function StopGhostView()
         distanceLabel = nil
     end
     
-    currentGhost = nil
+    if ghostListGui then
+        ghostListGui:Destroy()
+        ghostListGui = nil
+    end
 end
 
 ghostViewBtn.MouseButton1Click:Connect(function()
@@ -778,6 +946,10 @@ player.CharacterAdded:Connect(function()
         distanceGui:Destroy()
         distanceGui = nil
     end
+    if ghostListGui then
+        ghostListGui:Destroy()
+        ghostListGui = nil
+    end
     
     for _, hl in pairs(scanHighlights) do
         if hl then hl:Destroy() end
@@ -795,6 +967,4 @@ end)
 -- ============ Load Complete ============
 warn("✨ T-xpa TH โหลดสำเร็จ!")
 warn("🎨 BY ตูน EXE")
-warn("📋 ฟีเจอร์: วิ่งเร็ว, สแกนสิ่งของ, ลดเฟรมเรท, วิ่งทะลุ, ตัวสีรุ้ง, แปลงร่างใหญ่, มุมมองผี")
-warn("👁️ มุมมองผี: ค้นหาผีแบบอัตโนมัติ (ไม่พึ่งชื่อ)")
-warn("💡 คลิกที่หัวข้อเพื่อเปิด/ปิด | ลากเพื่อย้ายตำแหน่ง")
+warn("👁️ รายชื่อผี: P'Best, SamornSri, Chayanan Premsuk, Dance Teacher, Montra")
