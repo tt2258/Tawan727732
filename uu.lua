@@ -125,7 +125,6 @@ local selectedGhost = nil
 
 local ghostScanActive = false
 local ghostScanConnection = nil
-local scannedGhosts = {}
 local scannedGhostHighlights = {}
 
 -- ============ ระบบลาก UI ============
@@ -218,7 +217,6 @@ local function GetHRP()
     return char and char:FindFirstChild("HumanoidRootPart")
 end
 
--- ============ ตรวจสอบว่าเป็นผู้เล่นหรือไม่ ============
 local function IsPlayerCharacter(model)
     for _, plr in pairs(Players:GetPlayers()) do
         if plr.Character == model then
@@ -228,29 +226,23 @@ local function IsPlayerCharacter(model)
     return false
 end
 
--- ============ สแกนหา NPC ทั้งหมดในแมพ (อัตโนมัติ) ============
+-- ============ สแกน NPC ============
 local function ScanAllNPCs()
     local npcList = {}
     
     for _, obj in pairs(Workspace:GetDescendants()) do
         if obj:IsA("Model") then
-            -- ต้องมี Humanoid
             local humanoid = obj:FindFirstChildOfClass("Humanoid")
             if not humanoid then continue end
             
-            -- ต้องมี RootPart/Torso
             local rootPart = obj:FindFirstChild("HumanoidRootPart") 
                           or obj:FindFirstChild("UpperTorso") 
                           or obj:FindFirstChild("Torso")
             if not rootPart then continue end
             
-            -- ต้องไม่ใช่ตัวเรา
             if obj == player.Character then continue end
-            
-            -- ต้องไม่ใช่ผู้เล่นอื่น
             if IsPlayerCharacter(obj) then continue end
             
-            -- ผ่านทุกเงื่อนไข = NPC
             local displayName = obj.Name
             if displayName == "" or displayName == " " then
                 displayName = "ไม่มีชื่อ"
@@ -563,10 +555,211 @@ growBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ============ 7. มุมมองผี (สแกน NPC อัตโนมัติ) ============
+-- ============ ฟังก์ชันสร้าง UI เลือก NPC (แบบเลื่อนได้ + ปิดได้) ============
+local function CreateNPCSelector(title, themeColor, onSelectNPC, showSelfButton, onSelectSelf)
+    if title == nil then title = "เลือก NPC" end
+    
+    -- ลบ UI เก่า
+    local oldGui = player.PlayerGui:FindFirstChild("NPCSelector")
+    if oldGui then oldGui:Destroy() end
+    
+    local selectorGui = Instance.new("ScreenGui")
+    selectorGui.Name = "NPCSelector"
+    selectorGui.ResetOnSpawn = false
+    selectorGui.DisplayOrder = 1001
+    selectorGui.Parent = player.PlayerGui
+    
+    -- สแกน NPC
+    local npcList = ScanAllNPCs()
+    
+    -- Frame หลัก (มีขนาดจำกัด ไม่บังจอ)
+    local listFrame = Instance.new("Frame")
+    listFrame.Size = UDim2.new(0, 280, 0, 380)
+    listFrame.Position = UDim2.new(0.5, -140, 0.5, -190)
+    listFrame.BackgroundColor3 = Color3.fromRGB(20, 15, 35)
+    listFrame.BorderSizePixel = 0
+    listFrame.Active = true
+    listFrame.Draggable = true  -- ลากได้
+    listFrame.Parent = selectorGui
+    
+    local listCorner = Instance.new("UICorner")
+    listCorner.CornerRadius = UDim.new(0, 12)
+    listCorner.Parent = listFrame
+    
+    local listStroke = Instance.new("UIStroke")
+    listStroke.Color = themeColor
+    listStroke.Thickness = 2
+    listStroke.Parent = listFrame
+    
+    -- หัวข้อ (เล็ก ไม่บัง)
+    local header = Instance.new("Frame")
+    header.Size = UDim2.new(1, 0, 0, 40)
+    header.BackgroundColor3 = themeColor
+    header.BackgroundTransparency = 0.3
+    header.BorderSizePixel = 0
+    header.Parent = listFrame
+    
+    local headerCorner = Instance.new("UICorner")
+    headerCorner.CornerRadius = UDim.new(0, 12)
+    headerCorner.Parent = header
+    
+    -- ซ่อนมุมล่างของ header
+    local headerMask = Instance.new("Frame")
+    headerMask.Size = UDim2.new(1, 0, 0.5, 0)
+    headerMask.Position = UDim2.new(0, 0, 0.5, 0)
+    headerMask.BackgroundColor3 = themeColor
+    headerMask.BackgroundTransparency = 0.3
+    headerMask.BorderSizePixel = 0
+    headerMask.Parent = header
+    
+    local headerTitle = Instance.new("TextLabel")
+    headerTitle.Size = UDim2.new(1, -40, 1, 0)
+    headerTitle.Position = UDim2.new(0, 10, 0, 0)
+    headerTitle.BackgroundTransparency = 1
+    headerTitle.Text = title .. " (" .. #npcList .. ")"
+    headerTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+    headerTitle.TextSize = 14
+    headerTitle.Font = Enum.Font.GothamBold
+    headerTitle.TextXAlignment = Enum.TextXAlignment.Left
+    headerTitle.Parent = header
+    
+    -- ปุ่มปิด (ใหญ่ กดง่าย)
+    local closeBtn = Instance.new("TextButton")
+    closeBtn.Size = UDim2.new(0, 35, 0, 35)
+    closeBtn.Position = UDim2.new(1, -40, 0, 3)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    closeBtn.Text = "✕"
+    closeBtn.TextSize = 16
+    closeBtn.Font = Enum.Font.GothamBold
+    closeBtn.ZIndex = 10
+    closeBtn.Parent = header
+    
+    local closeCorner = Instance.new("UICorner")
+    closeCorner.CornerRadius = UDim.new(1, 0)
+    closeCorner.Parent = closeBtn
+    
+    closeBtn.MouseButton1Click:Connect(function()
+        selectorGui:Destroy()
+    end)
+    
+    -- Scroll Frame (เลื่อนได้ + มี ScrollBar ชัดเจน)
+    local listScroll = Instance.new("ScrollingFrame")
+    listScroll.Size = UDim2.new(1, -16, 1, -50)
+    listScroll.Position = UDim2.new(0, 8, 0, 45)
+    listScroll.BackgroundTransparency = 1
+    listScroll.BorderSizePixel = 0
+    listScroll.ScrollBarThickness = 8
+    listScroll.ScrollBarImageColor3 = themeColor
+    listScroll.ScrollBarImageTransparency = 0.2
+    listScroll.Active = true
+    listScroll.ScrollingDirection = Enum.ScrollingDirection.Y
+    listScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    listScroll.Parent = listFrame
+    
+    local scrollPadding = Instance.new("UIPadding")
+    scrollPadding.PaddingTop = UDim.new(0, 5)
+    scrollPadding.PaddingBottom = UDim.new(0, 5)
+    scrollPadding.PaddingLeft = UDim.new(0, 0)
+    scrollPadding.PaddingRight = UDim.new(0, 0)
+    scrollPadding.Parent = listScroll
+    
+    -- Layout
+    local layout = Instance.new("UIListLayout")
+    layout.Padding = UDim.new(0, 5)
+    layout.SortOrder = Enum.SortOrder.LayoutOrder
+    layout.Parent = listScroll
+    
+    -- คำนวณขนาด Canvas
+    local itemCount = #npcList + (showSelfButton and 1 or 0)
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        listScroll.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 10)
+    end)
+    
+    -- ปุ่ม "ตัวเรา" (ถ้าต้องการ)
+    if showSelfButton and onSelectSelf then
+        local selfBtn = Instance.new("TextButton")
+        selfBtn.Size = UDim2.new(1, 0, 0, 45)
+        selfBtn.BackgroundColor3 = Color3.fromRGB(60, 100, 200)
+        selfBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        selfBtn.Text = "🎮 ตัวเรา (กลับมุมมองตัวเอง)"
+        selfBtn.TextSize = 13
+        selfBtn.Font = Enum.Font.GothamBold
+        selfBtn.LayoutOrder = 0
+        selfBtn.Parent = listScroll
+        
+        local selfCorner = Instance.new("UICorner")
+        selfCorner.CornerRadius = UDim.new(0, 8)
+        selfCorner.Parent = selfBtn
+        
+        local selfStroke = Instance.new("UIStroke")
+        selfStroke.Color = Color3.fromRGB(100, 150, 255)
+        selfStroke.Thickness = 2
+        selfStroke.Parent = selfBtn
+        
+        selfBtn.MouseButton1Click:Connect(function()
+            onSelectSelf(selfBtn)
+        end)
+    end
+    
+    -- ถ้าไม่มี NPC
+    if #npcList == 0 then
+        local noNpcLabel = Instance.new("TextLabel")
+        noNpcLabel.Size = UDim2.new(1, 0, 0, 50)
+        noNpcLabel.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
+        noNpcLabel.TextColor3 = Color3.fromRGB(255, 200, 200)
+        noNpcLabel.Text = "❌ ไม่พบ NPC ในแมพนี้"
+        noNpcLabel.TextSize = 13
+        noNpcLabel.Font = Enum.Font.GothamBold
+        noNpcLabel.LayoutOrder = 1
+        noNpcLabel.Parent = listScroll
+        
+        local noNpcCorner = Instance.new("UICorner")
+        noNpcCorner.CornerRadius = UDim.new(0, 8)
+        noNpcCorner.Parent = noNpcLabel
+        return selectorGui
+    end
+    
+    -- ปุ่ม NPC แต่ละตัว
+    local startIndex = showSelfButton and 1 or 0
+    for i, npcData in ipairs(npcList) do
+        local npcBtn = Instance.new("TextButton")
+        npcBtn.Size = UDim2.new(1, 0, 0, 45)
+        npcBtn.BackgroundColor3 = Color3.fromRGB(45, 30, 75)
+        npcBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        npcBtn.Text = "👻 " .. npcData.name
+        npcBtn.TextSize = 13
+        npcBtn.Font = Enum.Font.GothamBold
+        npcBtn.LayoutOrder = startIndex + i
+        npcBtn.Parent = listScroll
+        
+        local npcCorner = Instance.new("UICorner")
+        npcCorner.CornerRadius = UDim.new(0, 8)
+        npcCorner.Parent = npcBtn
+        
+        local npcStroke = Instance.new("UIStroke")
+        npcStroke.Color = themeColor
+        npcStroke.Thickness = 1.5
+        npcStroke.Parent = npcBtn
+        
+        npcBtn.MouseButton1Click:Connect(function()
+            if not npcData.model.Parent then
+                npcBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
+                task.wait(0.5)
+                npcBtn.BackgroundColor3 = Color3.fromRGB(45, 30, 75)
+                return
+            end
+            
+            onSelectNPC(npcData, npcBtn)
+        end)
+    end
+    
+    return selectorGui
+end
+
+-- ============ 7. มุมมองผี (ใช้ NPC Selector แบบใหม่) ============
 local ghostHighlight = nil
 local selfHighlight = nil
-local ghostListGui = nil
 local distanceGui = nil
 local distanceLabel = nil
 
@@ -616,197 +809,6 @@ local function SetGhostHighlight(ghost)
     ghostHighlight.Parent = ghost
 end
 
-local function ShowGhostList()
-    if ghostListGui then ghostListGui:Destroy() end
-    
-    ghostListGui = Instance.new("ScreenGui")
-    ghostListGui.Name = "GhostViewSelector"
-    ghostListGui.ResetOnSpawn = false
-    ghostListGui.DisplayOrder = 1000
-    ghostListGui.Parent = player.PlayerGui
-    
-    -- สแกน NPC ทั้งหมด
-    local npcList = ScanAllNPCs()
-    
-    -- Frame หลัก
-    local listFrame = Instance.new("Frame")
-    local frameHeight = math.min(500, 100 + (#npcList * 50))
-    listFrame.Size = UDim2.new(0, 280, 0, frameHeight)
-    listFrame.Position = UDim2.new(0.5, -140, 0.5, -frameHeight/2)
-    listFrame.BackgroundColor3 = Color3.fromRGB(20, 15, 35)
-    listFrame.BorderSizePixel = 0
-    listFrame.Active = true
-    listFrame.Parent = ghostListGui
-    
-    local listCorner = Instance.new("UICorner")
-    listCorner.CornerRadius = UDim.new(0, 12)
-    listCorner.Parent = listFrame
-    
-    local listStroke = Instance.new("UIStroke")
-    listStroke.Color = Color3.fromRGB(160, 80, 255)
-    listStroke.Thickness = 2
-    listStroke.Parent = listFrame
-    
-    -- หัวข้อ
-    local header = Instance.new("TextLabel")
-    header.Size = UDim2.new(1, 0, 0, 45)
-    header.BackgroundColor3 = Color3.fromRGB(45, 25, 80)
-    header.BorderSizePixel = 0
-    header.Text = "👁️ เลือก NPC ที่ต้องการดู (" .. #npcList .. " ตัว)"
-    header.TextColor3 = Color3.fromRGB(255, 255, 255)
-    header.TextSize = 14
-    header.Font = Enum.Font.GothamBold
-    header.Parent = listFrame
-    
-    local headerCorner = Instance.new("UICorner")
-    headerCorner.CornerRadius = UDim.new(0, 12)
-    headerCorner.Parent = header
-    
-    -- ปุ่มปิด
-    local closeBtn = Instance.new("TextButton")
-    closeBtn.Size = UDim2.new(0, 30, 0, 30)
-    closeBtn.Position = UDim2.new(1, -35, 0, 8)
-    closeBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    closeBtn.Text = "✕"
-    closeBtn.TextSize = 14
-    closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.Parent = listFrame
-    
-    local closeCorner = Instance.new("UICorner")
-    closeCorner.CornerRadius = UDim.new(1, 0)
-    closeCorner.Parent = closeBtn
-    
-    closeBtn.MouseButton1Click:Connect(function()
-        ghostListGui:Destroy()
-        ghostListGui = nil
-    end)
-    
-    -- Scroll Frame
-    local listScroll = Instance.new("ScrollingFrame")
-    listScroll.Size = UDim2.new(1, -20, 1, -60)
-    listScroll.Position = UDim2.new(0, 10, 0, 50)
-    listScroll.BackgroundTransparency = 1
-    listScroll.BorderSizePixel = 0
-    listScroll.ScrollBarThickness = 4
-    listScroll.ScrollBarImageColor3 = Color3.fromRGB(160, 80, 255)
-    listScroll.CanvasSize = UDim2.new(0, 0, 0, (#npcList + 1) * 50 + 10)
-    listScroll.Parent = listFrame
-    
-    -- ปุ่ม "ตัวเรา"
-    local selfBtn = Instance.new("TextButton")
-    selfBtn.Size = UDim2.new(1, 0, 0, 45)
-    selfBtn.Position = UDim2.new(0, 0, 0, 0)
-    selfBtn.BackgroundColor3 = Color3.fromRGB(60, 100, 200)
-    selfBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    selfBtn.Text = "🎮 ตัวเรา (กลับมุมมองตัวเอง)"
-    selfBtn.TextSize = 13
-    selfBtn.Font = Enum.Font.GothamBold
-    selfBtn.Parent = listScroll
-    
-    local selfCorner = Instance.new("UICorner")
-    selfCorner.CornerRadius = UDim.new(0, 8)
-    selfCorner.Parent = selfBtn
-    
-    local selfStroke = Instance.new("UIStroke")
-    selfStroke.Color = Color3.fromRGB(100, 150, 255)
-    selfStroke.Thickness = 2
-    selfStroke.Parent = selfBtn
-    
-    selfBtn.MouseButton1Click:Connect(function()
-        selectedGhost = nil
-        
-        if ghostHighlight then
-            ghostHighlight:Destroy()
-            ghostHighlight = nil
-        end
-        
-        local camera = Workspace.CurrentCamera
-        local char = player.Character
-        if char then
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                camera.CFrame = CFrame.new(hrp.Position + Vector3.new(0, 10, 20), hrp.Position)
-                camera.Focus = CFrame.new(hrp.Position)
-            end
-        end
-        
-        selfBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-        task.wait(0.3)
-        selfBtn.BackgroundColor3 = Color3.fromRGB(60, 100, 200)
-        
-        if distanceLabel then
-            distanceLabel.Text = "🎮 กลับมาที่ตัวเราแล้ว"
-            distanceLabel.TextColor3 = Color3.fromRGB(100, 150, 255)
-        end
-    end)
-    
-    -- ถ้าไม่มี NPC
-    if #npcList == 0 then
-        local noNpcLabel = Instance.new("TextLabel")
-        noNpcLabel.Size = UDim2.new(1, 0, 0, 50)
-        noNpcLabel.Position = UDim2.new(0, 0, 0, 50)
-        noNpcLabel.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
-        noNpcLabel.TextColor3 = Color3.fromRGB(255, 200, 200)
-        noNpcLabel.Text = "❌ ไม่พบ NPC ในแมพนี้"
-        noNpcLabel.TextSize = 13
-        noNpcLabel.Font = Enum.Font.GothamBold
-        noNpcLabel.Parent = listScroll
-        
-        local noNpcCorner = Instance.new("UICorner")
-        noNpcCorner.CornerRadius = UDim.new(0, 8)
-        noNpcCorner.Parent = noNpcLabel
-    end
-    
-    -- ปุ่ม NPC แต่ละตัว
-    for i, npcData in ipairs(npcList) do
-        local npcBtn = Instance.new("TextButton")
-        npcBtn.Size = UDim2.new(1, 0, 0, 45)
-        npcBtn.Position = UDim2.new(0, 0, 0, i * 50)
-        npcBtn.BackgroundColor3 = Color3.fromRGB(45, 30, 75)
-        npcBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        npcBtn.Text = "👻 " .. npcData.name
-        npcBtn.TextSize = 13
-        npcBtn.Font = Enum.Font.GothamBold
-        npcBtn.Parent = listScroll
-        
-        local npcCorner = Instance.new("UICorner")
-        npcCorner.CornerRadius = UDim.new(0, 8)
-        npcCorner.Parent = npcBtn
-        
-        local npcStroke = Instance.new("UIStroke")
-        npcStroke.Color = Color3.fromRGB(160, 80, 255)
-        npcStroke.Thickness = 1.5
-        npcStroke.Parent = npcBtn
-        
-        npcBtn.MouseButton1Click:Connect(function()
-            -- เช็คว่า NPC ยังอยู่หรือไม่
-            if not npcData.model.Parent then
-                npcBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-                if distanceLabel then
-                    distanceLabel.Text = "❌ NPC หมดแล้ว"
-                    distanceLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
-                end
-                task.wait(0.5)
-                npcBtn.BackgroundColor3 = Color3.fromRGB(45, 30, 75)
-                return
-            end
-            
-            selectedGhost = npcData.model
-            SetGhostHighlight(npcData.model)
-            
-            npcBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-            task.wait(0.3)
-            npcBtn.BackgroundColor3 = Color3.fromRGB(45, 30, 75)
-            
-            if distanceLabel then
-                distanceLabel.Text = "👁️ กำลังติดตาม: " .. npcData.name
-                distanceLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-            end
-        end)
-    end
-end
-
 local function CreateDistanceGui()
     if distanceGui then distanceGui:Destroy() end
     
@@ -847,7 +849,56 @@ local function StartGhostView()
     ghostViewActive = true
     SetSelfRainbowHighlight()
     CreateDistanceGui()
-    ShowGhostList()
+    
+    -- เปิด UI เลือก NPC แบบใหม่
+    CreateNPCSelector(
+        "👁️ เลือก NPC ที่จะดูกล้อง",
+        Color3.fromRGB(160, 80, 255),
+        -- เมื่อเลือก NPC
+        function(npcData, btn)
+            selectedGhost = npcData.model
+            SetGhostHighlight(npcData.model)
+            
+            btn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+            task.wait(0.3)
+            btn.BackgroundColor3 = Color3.fromRGB(45, 30, 75)
+            
+            if distanceLabel then
+                distanceLabel.Text = "👁️ กำลังติดตาม: " .. npcData.name
+                distanceLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+            end
+        end,
+        -- แสดงปุ่ม "ตัวเรา"
+        true,
+        -- เมื่อกดตัวเรา
+        function(btn)
+            selectedGhost = nil
+            
+            if ghostHighlight then
+                ghostHighlight:Destroy()
+                ghostHighlight = nil
+            end
+            
+            local camera = Workspace.CurrentCamera
+            local char = player.Character
+            if char then
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    camera.CFrame = CFrame.new(hrp.Position + Vector3.new(0, 10, 20), hrp.Position)
+                    camera.Focus = CFrame.new(hrp.Position)
+                end
+            end
+            
+            btn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+            task.wait(0.3)
+            btn.BackgroundColor3 = Color3.fromRGB(60, 100, 200)
+            
+            if distanceLabel then
+                distanceLabel.Text = "🎮 กลับมาที่ตัวเราแล้ว"
+                distanceLabel.TextColor3 = Color3.fromRGB(100, 150, 255)
+            end
+        end
+    )
     
     ghostViewConnection = RunService.RenderStepped:Connect(function()
         if not ghostViewActive then return end
@@ -923,10 +974,8 @@ local function StopGhostView()
         distanceLabel = nil
     end
     
-    if ghostListGui then
-        ghostListGui:Destroy()
-        ghostListGui = nil
-    end
+    local selectorGui = player.PlayerGui:FindFirstChild("NPCSelector")
+    if selectorGui then selectorGui:Destroy() end
 end
 
 ghostViewBtn.MouseButton1Click:Connect(function()
@@ -942,7 +991,7 @@ ghostViewBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ============ 8. สแกนผี (สแกน NPC อัตโนมัติ) ============
+-- ============ 8. สแกนผี (ใช้ NPC Selector แบบใหม่) ============
 local function SetGhostRainbowScan(ghost)
     if not ghost then return end
     
@@ -1007,166 +1056,47 @@ local function ClearGhostScan()
     end
 end
 
-local ghostScanListGui = nil
-
-local function ShowGhostScanList()
-    if ghostScanListGui then ghostScanListGui:Destroy() end
-    
-    ghostScanListGui = Instance.new("ScreenGui")
-    ghostScanListGui.Name = "GhostScanSelector"
-    ghostScanListGui.ResetOnSpawn = false
-    ghostScanListGui.DisplayOrder = 1000
-    ghostScanListGui.Parent = player.PlayerGui
-    
-    -- สแกน NPC ทั้งหมด
-    local npcList = ScanAllNPCs()
-    
-    local listFrame = Instance.new("Frame")
-    local frameHeight = math.min(500, 100 + (#npcList * 50))
-    listFrame.Size = UDim2.new(0, 280, 0, frameHeight)
-    listFrame.Position = UDim2.new(0.5, -140, 0.5, -frameHeight/2)
-    listFrame.BackgroundColor3 = Color3.fromRGB(20, 15, 35)
-    listFrame.BorderSizePixel = 0
-    listFrame.Active = true
-    listFrame.Parent = ghostScanListGui
-    
-    local listCorner = Instance.new("UICorner")
-    listCorner.CornerRadius = UDim.new(0, 12)
-    listCorner.Parent = listFrame
-    
-    local listStroke = Instance.new("UIStroke")
-    listStroke.Color = Color3.fromRGB(255, 100, 200)
-    listStroke.Thickness = 2
-    listStroke.Parent = listFrame
-    
-    local header = Instance.new("TextLabel")
-    header.Size = UDim2.new(1, 0, 0, 45)
-    header.BackgroundColor3 = Color3.fromRGB(80, 25, 60)
-    header.BorderSizePixel = 0
-    header.Text = "🎯 เลือก NPC ที่ต้องการสแกน (" .. #npcList .. " ตัว)"
-    header.TextColor3 = Color3.fromRGB(255, 255, 255)
-    header.TextSize = 14
-    header.Font = Enum.Font.GothamBold
-    header.Parent = listFrame
-    
-    local headerCorner = Instance.new("UICorner")
-    headerCorner.CornerRadius = UDim.new(0, 12)
-    headerCorner.Parent = header
-    
-    local closeBtn = Instance.new("TextButton")
-    closeBtn.Size = UDim2.new(0, 30, 0, 30)
-    closeBtn.Position = UDim2.new(1, -35, 0, 8)
-    closeBtn.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
-    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    closeBtn.Text = "✕"
-    closeBtn.TextSize = 14
-    closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.Parent = listFrame
-    
-    local closeCorner = Instance.new("UICorner")
-    closeCorner.CornerRadius = UDim.new(1, 0)
-    closeCorner.Parent = closeBtn
-    
-    closeBtn.MouseButton1Click:Connect(function()
-        ghostScanListGui:Destroy()
-        ghostScanListGui = nil
-    end)
-    
-    local listScroll = Instance.new("ScrollingFrame")
-    listScroll.Size = UDim2.new(1, -20, 1, -60)
-    listScroll.Position = UDim2.new(0, 10, 0, 50)
-    listScroll.BackgroundTransparency = 1
-    listScroll.BorderSizePixel = 0
-    listScroll.ScrollBarThickness = 4
-    listScroll.ScrollBarImageColor3 = Color3.fromRGB(255, 100, 200)
-    listScroll.CanvasSize = UDim2.new(0, 0, 0, (#npcList + 2) * 50 + 10)
-    listScroll.Parent = listFrame
-    
-    -- ปุ่ม "ล้างทั้งหมด"
-    local clearBtn = Instance.new("TextButton")
-    clearBtn.Size = UDim2.new(1, 0, 0, 45)
-    clearBtn.Position = UDim2.new(0, 0, 0, 0)
-    clearBtn.BackgroundColor3 = Color3.fromRGB(150, 30, 30)
-    clearBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    clearBtn.Text = "🗑️ ล้างการสแกนทั้งหมด"
-    clearBtn.TextSize = 13
-    clearBtn.Font = Enum.Font.GothamBold
-    clearBtn.Parent = listScroll
-    
-    local clearCorner = Instance.new("UICorner")
-    clearCorner.CornerRadius = UDim.new(0, 8)
-    clearCorner.Parent = clearBtn
-    
-    local clearStroke = Instance.new("UIStroke")
-    clearStroke.Color = Color3.fromRGB(255, 100, 100)
-    clearStroke.Thickness = 2
-    clearStroke.Parent = clearBtn
-    
-    clearBtn.MouseButton1Click:Connect(function()
-        ClearGhostScan()
-        clearBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-        task.wait(0.3)
-        clearBtn.BackgroundColor3 = Color3.fromRGB(150, 30, 30)
-    end)
-    
-    -- ถ้าไม่มี NPC
-    if #npcList == 0 then
-        local noNpcLabel = Instance.new("TextLabel")
-        noNpcLabel.Size = UDim2.new(1, 0, 0, 50)
-        noNpcLabel.Position = UDim2.new(0, 0, 0, 50)
-        noNpcLabel.BackgroundColor3 = Color3.fromRGB(80, 30, 30)
-        noNpcLabel.TextColor3 = Color3.fromRGB(255, 200, 200)
-        noNpcLabel.Text = "❌ ไม่พบ NPC ในแมพนี้"
-        noNpcLabel.TextSize = 13
-        noNpcLabel.Font = Enum.Font.GothamBold
-        noNpcLabel.Parent = listScroll
-        
-        local noNpcCorner = Instance.new("UICorner")
-        noNpcCorner.CornerRadius = UDim.new(0, 8)
-        noNpcCorner.Parent = noNpcLabel
-    end
-    
-    -- ปุ่ม NPC แต่ละตัว
-    for i, npcData in ipairs(npcList) do
-        local npcBtn = Instance.new("TextButton")
-        npcBtn.Size = UDim2.new(1, 0, 0, 45)
-        npcBtn.Position = UDim2.new(0, 0, 0, i * 50)
-        npcBtn.BackgroundColor3 = Color3.fromRGB(45, 30, 75)
-        npcBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        npcBtn.Text = "🎯 " .. npcData.name
-        npcBtn.TextSize = 13
-        npcBtn.Font = Enum.Font.GothamBold
-        npcBtn.Parent = listScroll
-        
-        local npcCorner = Instance.new("UICorner")
-        npcCorner.CornerRadius = UDim.new(0, 8)
-        npcCorner.Parent = npcBtn
-        
-        local npcStroke = Instance.new("UIStroke")
-        npcStroke.Color = Color3.fromRGB(255, 100, 200)
-        npcStroke.Thickness = 1.5
-        npcStroke.Parent = npcBtn
-        
-        npcBtn.MouseButton1Click:Connect(function()
-            if not npcData.model.Parent then
-                npcBtn.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-                task.wait(0.5)
-                npcBtn.BackgroundColor3 = Color3.fromRGB(45, 30, 75)
-                return
-            end
-            
-            SetGhostRainbowScan(npcData.model)
-            
-            npcBtn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
-            task.wait(0.3)
-            npcBtn.BackgroundColor3 = Color3.fromRGB(45, 30, 75)
-        end)
-    end
-end
-
 local function StartGhostScan()
     ghostScanActive = true
-    ShowGhostScanList()
+    
+    -- เปิด UI เลือก NPC แบบใหม่ + เพิ่มปุ่มล้างการสแกน
+    local selector = CreateNPCSelector(
+        "🎯 เลือก NPC ที่จะสแกน",
+        Color3.fromRGB(255, 100, 200),
+        -- เมื่อเลือก NPC
+        function(npcData, btn)
+            SetGhostRainbowScan(npcData.model)
+            
+            btn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+            task.wait(0.3)
+            btn.BackgroundColor3 = Color3.fromRGB(45, 30, 75)
+        end,
+        -- แสดงปุ่ม "ล้างการสแกนทั้งหมด"
+        true,
+        -- เมื่อกดล้าง
+        function(btn)
+            ClearGhostScan()
+            btn.BackgroundColor3 = Color3.fromRGB(0, 150, 0)
+            task.wait(0.3)
+            btn.BackgroundColor3 = Color3.fromRGB(150, 30, 30)
+        end
+    )
+    
+    -- เปลี่ยนข้อความปุ่มแรกเป็น "ล้างการสแกน"
+    local firstBtn = selector:FindFirstChild("Frame", true)
+    if firstBtn then
+        local scroll = firstBtn:FindFirstChild("ScrollingFrame", true)
+        if scroll then
+            for _, child in pairs(scroll:GetChildren()) do
+                if child:IsA("TextButton") and child.LayoutOrder == 0 then
+                    child.Text = "🗑️ ล้างการสแกนทั้งหมด"
+                    child.BackgroundColor3 = Color3.fromRGB(150, 30, 30)
+                    local stroke = child:FindFirstChildOfClass("UIStroke")
+                    if stroke then stroke.Color = Color3.fromRGB(255, 100, 100) end
+                end
+            end
+        end
+    end
     
     ghostScanConnection = RunService.Heartbeat:Connect(function()
         if not ghostScanActive then return end
@@ -1217,10 +1147,8 @@ local function StopGhostScan()
     
     ClearGhostScan()
     
-    if ghostScanListGui then
-        ghostScanListGui:Destroy()
-        ghostScanListGui = nil
-    end
+    local selectorGui = player.PlayerGui:FindFirstChild("NPCSelector")
+    if selectorGui then selectorGui:Destroy() end
 end
 
 ghostScanBtn.MouseButton1Click:Connect(function()
@@ -1280,10 +1208,6 @@ player.CharacterAdded:Connect(function()
         distanceGui:Destroy()
         distanceGui = nil
     end
-    if ghostListGui then
-        ghostListGui:Destroy()
-        ghostListGui = nil
-    end
     
     ghostScanActive = false
     if ghostScanConnection then
@@ -1291,10 +1215,9 @@ player.CharacterAdded:Connect(function()
         ghostScanConnection = nil
     end
     ClearGhostScan()
-    if ghostScanListGui then
-        ghostScanListGui:Destroy()
-        ghostScanListGui = nil
-    end
+    
+    local selectorGui = player.PlayerGui:FindFirstChild("NPCSelector")
+    if selectorGui then selectorGui:Destroy() end
     
     for _, hl in pairs(scanHighlights) do
         if hl then hl:Destroy() end
@@ -1312,4 +1235,4 @@ end)
 -- ============ Load Complete ============
 warn("✨ T-xpa TH โหลดสำเร็จ!")
 warn("🎨 BY ตูน EXE")
-warn("🎯 ระบบสแกน NPC อัตโนมัติ - ใช้ได้ทุกแมพ!")
+warn("🎯 UI เลือก NPC เลื่อนได้ + ปิดได้ + ลากได้")
