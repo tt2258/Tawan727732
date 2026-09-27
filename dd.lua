@@ -11,6 +11,7 @@ local screenGui = Instance.new("ScreenGui")
 screenGui.Parent = player.PlayerGui
 screenGui.ResetOnSpawn = false
 screenGui.Name = "T-xpaTH"
+screenGui.DisplayOrder = 999
 
 -- ============ Main Frame ============
 local mainFrame = Instance.new("Frame")
@@ -38,6 +39,7 @@ titleBtn.Text = "✨ T-xpa TH ▼"
 titleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 titleBtn.TextSize = 16
 titleBtn.Font = Enum.Font.GothamBold
+titleBtn.Active = true
 titleBtn.Parent = mainFrame
 
 -- ============ Scroll Frame ============
@@ -52,6 +54,7 @@ scrollFrame.ScrollBarImageColor3 = Color3.fromRGB(160, 80, 255)
 scrollFrame.ScrollBarImageTransparency = 0.3
 scrollFrame.CanvasSize = UDim2.new(0, 0, 0, 470)
 scrollFrame.Visible = true
+scrollFrame.Active = true
 scrollFrame.Parent = mainFrame
 
 local scrollCorner = Instance.new("UICorner")
@@ -76,6 +79,7 @@ local function CreateBtn(name, yPos, emoji)
     btn.Text = emoji .. " " .. name .. ": OFF"
     btn.TextSize = 13
     btn.Font = Enum.Font.GothamBold
+    btn.Active = true
     btn.Parent = scrollFrame
     
     local corner = Instance.new("UICorner")
@@ -116,41 +120,37 @@ local isMenuOpen = false
 local ghostViewActive = false
 local ghostViewConnection = nil
 
--- ============ ระบบลาก UI ============
+-- ============ ระบบลาก UI (แยกคลิก/ลาก ชัดเจน) ============
 local dragging = false
 local dragStart = nil
 local startPos = nil
+local dragMoved = false
+local DRAG_THRESHOLD = 5 -- ต้องลากเกิน 5 pixel ถึงจะนับว่าลาก
 
 local function updateDrag(input)
     local delta = input.Position - dragStart
-    mainFrame.Position = UDim2.new(
-        startPos.X.Scale,
-        startPos.X.Offset + delta.X,
-        startPos.Y.Scale,
-        startPos.Y.Offset + delta.Y
-    )
+    
+    -- เช็คว่าลากเกิน threshold หรือยัง
+    if math.abs(delta.X) > DRAG_THRESHOLD or math.abs(delta.Y) > DRAG_THRESHOLD then
+        dragMoved = true
+    end
+    
+    if dragMoved then
+        mainFrame.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+    end
 end
 
-mainFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or 
-       input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = mainFrame.Position
-    end
-end)
-
-mainFrame.InputChanged:Connect(function(input)
-    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or 
-                     input.UserInputType == Enum.UserInputType.Touch) then
-        updateDrag(input)
-    end
-end)
-
+-- ผูกการลากกับ Title Button
 titleBtn.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or 
        input.UserInputType == Enum.UserInputType.Touch then
         dragging = true
+        dragMoved = false
         dragStart = input.Position
         startPos = mainFrame.Position
     end
@@ -163,6 +163,39 @@ titleBtn.InputChanged:Connect(function(input)
     end
 end)
 
+titleBtn.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or 
+       input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+-- ผูกการลากกับ Main Frame (เฉพาะพื้นที่ที่ไม่ใช่ปุ่ม)
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or 
+       input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragMoved = false
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
+end)
+
+mainFrame.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or 
+                     input.UserInputType == Enum.UserInputType.Touch) then
+        updateDrag(input)
+    end
+end)
+
+mainFrame.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or 
+       input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+-- หยุดลากเมื่อปล่อยเมาส์ทุกที่
 UserInputService.InputEnded:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or 
        input.UserInputType == Enum.UserInputType.Touch then
@@ -181,7 +214,7 @@ local function GetHRP()
     return char and char:FindFirstChild("HumanoidRootPart")
 end
 
--- ============ ตรวจสอบว่าตัวนั้นเป็นผู้เล่นหรือไม่ ============
+-- ============ ตรวจสอบผู้เล่น ============
 local function IsPlayerCharacter(model)
     for _, plr in pairs(Players:GetPlayers()) do
         if plr.Character == model then
@@ -191,9 +224,7 @@ local function IsPlayerCharacter(model)
     return false
 end
 
--- ============ ค้นหาผีแบบอัตโนมัติ (ไม่พึ่งชื่อ) ============
--- หลักการ: หา Model ที่มี Humanoid, มี RootPart, และ "ไม่ใช่ผู้เล่น" และ "ไม่ใช่ตัวเรา"
--- พร้อมตรวจสอบว่าเป็นศัตรู (มี Tag, Attribute, หรือ Team ที่บ่งบอก)
+-- ============ ค้นหาผีอัตโนมัติ ============
 local function FindGhost()
     local myHRP = GetHRP()
     if not myHRP then return nil, 0 end
@@ -203,23 +234,17 @@ local function FindGhost()
     
     for _, obj in pairs(Workspace:GetDescendants()) do
         if obj:IsA("Model") then
-            -- ต้องมี Humanoid และ Health > 0
             local humanoid = obj:FindFirstChildOfClass("Humanoid")
             if not humanoid or humanoid.Health <= 0 then continue end
             
-            -- ต้องมี RootPart หรือ Torso
             local rootPart = obj:FindFirstChild("HumanoidRootPart") 
                           or obj:FindFirstChild("UpperTorso") 
                           or obj:FindFirstChild("Torso")
             if not rootPart then continue end
             
-            -- ต้องไม่ใช่ตัวเรา
             if obj == player.Character then continue end
-            
-            -- ต้องไม่ใช่ผู้เล่นอื่น
             if IsPlayerCharacter(obj) then continue end
             
-            -- ✅ ถือว่าเป็น NPC/ผี
             local distance = (myHRP.Position - rootPart.Position).Magnitude
             if distance < nearestDistance then
                 nearestDistance = distance
@@ -245,6 +270,14 @@ local function ToggleMenu()
         mainFrame.Size = UDim2.new(0, 320, 0, 45)
     end
 end
+
+-- ============ กดที่ Title เพื่อเปิด/ปิด (ถ้าไม่ได้ลาก) ============
+titleBtn.MouseButton1Click:Connect(function()
+    if not dragMoved then
+        ToggleMenu()
+    end
+    dragMoved = false
+end)
 
 -- ============ ไฟวิ่งรอบเมนูม่วง ============
 task.spawn(function()
@@ -519,7 +552,7 @@ growBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ============ 7. มุมมองผี (ค้นหาอัตโนมัติ) ============
+-- ============ 7. มุมมองผี ============
 local ghostHighlight = nil
 local selfHighlight = nil
 local distanceLabel = nil
@@ -578,6 +611,7 @@ local function CreateDistanceGui()
     distanceGui = Instance.new("ScreenGui")
     distanceGui.Name = "GhostViewDistance"
     distanceGui.ResetOnSpawn = false
+    distanceGui.DisplayOrder = 998
     distanceGui.Parent = player.PlayerGui
     
     local frame = Instance.new("Frame")
@@ -702,13 +736,6 @@ ghostViewBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ============ Toggle Menu ============
-titleBtn.MouseButton1Click:Connect(function()
-    if not dragging then
-        ToggleMenu()
-    end
-end)
-
 -- ============ รีเซ็ตเมื่อเกิดใหม่ ============
 player.CharacterAdded:Connect(function()
     task.wait(1)
@@ -770,3 +797,4 @@ warn("✨ T-xpa TH โหลดสำเร็จ!")
 warn("🎨 BY ตูน EXE")
 warn("📋 ฟีเจอร์: วิ่งเร็ว, สแกนสิ่งของ, ลดเฟรมเรท, วิ่งทะลุ, ตัวสีรุ้ง, แปลงร่างใหญ่, มุมมองผี")
 warn("👁️ มุมมองผี: ค้นหาผีแบบอัตโนมัติ (ไม่พึ่งชื่อ)")
+warn("💡 คลิกที่หัวข้อเพื่อเปิด/ปิด | ลากเพื่อย้ายตำแหน่ง")
